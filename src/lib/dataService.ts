@@ -41,7 +41,9 @@ function seedOnce() {
     writeLS('notifications', demo.demoNotifications)
     writeLS('invites', demo.demoInvites)
     writeLS('currentUserId', demo.demoUserId1)
-    writeLS('currentTeamId', demo.demoTeams[0].teamId)
+    if (demo.demoTeams.length > 0) {
+        writeLS('currentTeamId', demo.demoTeams[0].teamId)
+    }
     localStorage.setItem(LS_PREFIX + 'seeded_v1', 'true')
 }
 

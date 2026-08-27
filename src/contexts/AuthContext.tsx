@@ -17,7 +17,7 @@ import {
   getCurrentTeamId, setCurrentTeam as dsSetCurrentTeam, listTeamsForUser,
   hasSuperAdmin, promoteToSuperAdmin,
 } from '@/lib/dataService'
-import { demoUsers, demoTeams, demoUserId1 } from '@/lib/demoData'
+import { demoUsers, demoTeams, demoUserId1, demoPasswords } from '@/lib/demoData'
 
 interface AuthContextType {
   currentUser: User | null
@@ -146,7 +146,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isDemoMode) {
         const matched = demoUsers.find(u => u.email.toLowerCase() === email.toLowerCase())
         if (!matched) throw new Error('Invalid credentials')
-        if (password.length < 6) throw new Error('Invalid credentials')
+        const expectedPassword = demoPasswords[matched.userId]
+        if (expectedPassword ? password !== expectedPassword : password.length < 6) throw new Error('Invalid credentials')
         uid = matched.userId
       } else {
         const cred = await signInWithEmailAndPassword(auth, email, password)

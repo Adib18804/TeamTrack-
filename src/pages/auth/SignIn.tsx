@@ -32,7 +32,7 @@ export default function SignIn() {
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { email: 'alex@teamtrack.dev', password: 'password' },
+    defaultValues: { email: 'adib@teamtrack.dev', password: 'AdibAdmin123' },
   })
 
   async function onSubmit(data: FormData) {
