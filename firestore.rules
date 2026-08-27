@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() { return request.auth != null; }
+    function userId() { return request.auth.uid; }
+
+    function userDoc() { return get(/databases/$(database)/documents/users/$(userId())); }
+    function isSuperAdmin() { return isAuthenticated() && userDoc().data.globalRole == 'super_admin'; }
+
+    function userTeams() {
+      return isAuthenticated() ? userDoc().data.teamMemberships : [];
+    }
+    function hasTeamMembership(tid) {
+      if (isSuperAdmin()) { return true; }
+      if (!isAuthenticated()) { return false; }
+      return userTeams().filter(m => m.teamId == tid).size() > 0;
+    }
+    function userRoleInTeam(tid) {
+      if (isSuperAdmin()) { return 'super_admin'; }
+      if (!isAuthenticated()) { return 'none'; }
+      let matches = userTeams().filter(m => m.teamId == tid);
+      return matches.size() > 0 ? matches[0].role : 'none';
+    }
+    function isTeamAdmin(tid) {
+      let r = userRoleInTeam(tid);
+      return r == 'super_admin' || r == 'team_admin';
+    }
+
+    match /users/{uid} {
+      allow read: if isAuthenticated() && (uid == userId() || isSuperAdmin());
+      allow create: if uid == userId();
+      allow update: if uid == userId() || isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /teams/{tid} {
+      allow read: if hasTeamMembership(tid);
+      allow create: if isSuperAdmin() || (isAuthenticated() && request.resource.data.createdBy == userId());
+      allow update: if isTeamAdmin(tid);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /team_invites/{iid} {
+      allow read: if isTeamAdmin(resource.data.teamId) || (isAuthenticated() && request.auth.token.email == resource.data.email);
+      allow create: if isTeamAdmin(request.resource.data.teamId);
+      allow update: if isTeamAdmin(resource.data.teamId);
+    }
+
+    match /domains/{did} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create, update, delete: if isTeamAdmin(request.resource.data.teamId);
+    }
+    match /topics/{tid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create, update, delete: if isTeamAdmin(request.resource.data.teamId);
+    }
+    match /subtopics/{sid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create, update, delete: if isTeamAdmin(request.resource.data.teamId);
+    }
+
+    match /tasks/{tkid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create: if hasTeamMembership(request.resource.data.teamId);
+      allow update: if hasTeamMembership(resource.data.teamId) && (
+        isTeamAdmin(resource.data.teamId) ||
+        resource.data.createdBy == userId() ||
+        resource.data.assignedUsers.hasAny([userId()])
+      );
+      allow delete: if isTeamAdmin(resource.data.teamId);
+    }
+
+    match /daily_logs/{lid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create: if hasTeamMembership(request.resource.data.teamId) && request.resource.data.userId == userId();
+      allow update: if hasTeamMembership(resource.data.teamId) && (resource.data.userId == userId() || isTeamAdmin(resource.data.teamId));
+      allow delete: if isTeamAdmin(resource.data.teamId);
+    }
+
+    match /projects/{pid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create: if isTeamAdmin(request.resource.data.teamId);
+      allow update: if isTeamAdmin(resource.data.teamId);
+      allow delete: if isTeamAdmin(resource.data.teamId);
+    }
+
+    match /resources/{rid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create: if hasTeamMembership(request.resource.data.teamId);
+      allow update: if hasTeamMembership(resource.data.teamId) && (resource.data.createdBy == userId() || isTeamAdmin(resource.data.teamId));
+      allow delete: if isTeamAdmin(resource.data.teamId);
+    }
+
+    match /contests/{cid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create, update, delete: if isTeamAdmin(request.resource.data.teamId);
+    }
+    match /contest_submissions/{sid} {
+      allow read: if hasTeamMembership(resource.data.teamId) && (resource.data.userId == userId() || isTeamAdmin(resource.data.teamId));
+      allow create: if hasTeamMembership(request.resource.data.teamId) && request.resource.data.userId == userId();
+      allow update: if hasTeamMembership(resource.data.teamId) && isTeamAdmin(resource.data.teamId);
+    }
+
+    match /research/{rid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create: if hasTeamMembership(request.resource.data.teamId);
+      allow update: if hasTeamMembership(resource.data.teamId) && (
+        isTeamAdmin(resource.data.teamId) ||
+        resource.data.createdBy == userId() ||
+        resource.data.assignedMembers.hasAny([userId()])
+      );
+      allow delete: if isTeamAdmin(resource.data.teamId);
+    }
+
+    match /channels/{chid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create, update, delete: if isTeamAdmin(request.resource.data.teamId);
+    }
+
+    match /messages/{mid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create: if hasTeamMembership(request.resource.data.teamId) && request.resource.data.userId == userId();
+      allow update: if request.resource.data.userId == userId() && request.resource.data.content is string;
+      allow delete: if resource.data.userId == userId() || isTeamAdmin(resource.data.teamId);
+    }
+
+    match /notifications/{nid} {
+      allow read: if isAuthenticated() && resource.data.userId == userId();
+      allow create, update, delete: if isSuperAdmin() || (request.auth != null && resource.data.userId == userId());
+    }
+
+    match /roadmaps/{rmid} {
+      allow read: if hasTeamMembership(resource.data.teamId);
+      allow create, update, delete: if isTeamAdmin(request.resource.data.teamId);
+    }
+    match /learning_progress/{lpid} {
+      allow read: if isAuthenticated() && resource.data.userId == userId();
+      allow create, update: if isAuthenticated() && request.resource.data.userId == userId();
+    }
+  }
+}
